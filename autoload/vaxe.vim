@@ -167,7 +167,9 @@ function! vaxe#HaxeComplete(findstart, base)
         return []
     endif
 
-    call s:HandleWriteEvent()
+    if exists('g:vaxe_completion_use_display_stdin') && g:vaxe_completion_use_display_stdin > 0
+        call s:HandleWriteEvent()
+    endif
 
     if a:findstart
         let line = getline('.')
@@ -179,7 +181,13 @@ function! vaxe#HaxeComplete(findstart, base)
         let basecol = max([period,paren]) + 1
         return basecol
     else
-        return s:FormatDisplayCompletion(a:base)
+        if !exists('g:vaxe_completion_use_display_stdin') || g:vaxe_completion_use_display_stdin < 1
+            " using legacy --display (using the physical file offset)
+            return s:FormatDisplayCompletion(a:base)
+        else
+            " using -D display-stdin --display (using stdin rather than file, See https://github.com/HaxeFoundation/haxe/pull/5120)
+            return s:FormatDisplayCompletionStdin(a:base)
+        endif
     endif
 endfunction
 
@@ -626,6 +634,9 @@ function! s:ShowCompletionError(title, msg)
 endfunction
 
 " The main completion function that invokes the compiler, etc.
+" See also the new s:FormatDisplayCompletionStdin, doing the same thing
+" but sending content of the buffer via stdin rather than using a physical
+" file.
 function! s:FormatDisplayCompletion(base)
     if g:vaxe_completion_require_autowrite && !(&autowrite || &autowriteall)
         return s:ShowCompletionError("Vim configuration error: ", "Please ':set autowrite' for haxe completion to work properly ")
@@ -666,4 +677,70 @@ function! s:FormatDisplayCompletion(base)
 
     return output
 endfunction
+
+" Don't use physical file but send info via stdin,
+" thanks to haxe -D display-stdin ( https://github.com/HaxeFoundation/haxe/pull/5120 )
+function! s:FormatDisplayCompletionStdin(base)
+    let vaxe_hxml = vaxe#CurrentBuild()
+    return s:ShowCompletionError("Compiler error: ",  "let g:vaxe_completion_use_display_stdin = 1 is waiting for https://github.com/vim/vim/pull/4049");
+    if !has('channel')
+        return s:ShowCompletionError("Compiler error: ",  "Your vim is not compiled with +channel feature, therefore you cannot use the feature set by let g:vaxe_completion_use_display_stdin = 1")
+    end
+    if !filereadable(vaxe_hxml)
+        return s:ShowCompletionError("Compiler error: ",  "No valid build file")
+    endif
+    if !exists("g:vaxe_cache_server")
+        return s:ShowCompletionError("g:vaxe_cache_server is not defined")
+    endif
+
+    let stripped = vaxe#CurrentBlockHxml()
+    let stripped = "--cwd " . fnameescape(g:vaxe_working_directory)
+                \. " \n--connect "
+                \.  g:vaxe_cache_server_port
+                \. " \n" . stripped
+    let complete_args = stripped."\n--display ".fnameescape(expand("%:p"))."\n-D display-stdin"
+
+    let hxml_sys = g:vaxe_haxe_binary ." ".complete_args
+    let hxml_sys = join(split(hxml_sys,"\n")," ")
+
+    " here since we didn't specify a @<offset> as in --display file.hx@<offset>
+    " it means we send the content of the buffer via stdin...
+
+    " prepare stdin... (starts with 0x01, ends with 0x00)
+    let buffer_content = hxml_sys
+
+    let buffer_content = "haxe --cwd /home/alex/opt/perso/cold -debug --connect 6878 -cp cold -cp cold/test -cp cold/test/async -lib format -lib record-macros -lib crypto -lib tink_core -lib tink_streams -lib unit -lib hx-yaml -lib tink_cli -lib tink_macro -lib tink_asynctable -lib tink_testrunner -lib tink_concurrent -lib tink_state -lib linc_syslog -lib linc_systemsignal -lib linc_sys -D concurrent -lib http-status -lib haxe-strings -lib polygonal-printf -resource build/toget_coldkey.iv -resource build/coldkey.iv -resource build/scramble.key -resource build/scramble.iv -cpp target/cpp -main cold.Main"
+    let buffer_content .= " --display cold/CmdScriptSyncAssets.hx -D display-stdin "
+    let buffer_content .= nr2char(0x01)
+    let buffer_content .= join(getbufline(bufname(""), 1, line(".")-1), "\n")
+    let thisline = getline(".")
+    let i = getcurpos()[2]
+    " Notice here we introduce a | so we don't need a @<offset>
+    let buffer_content .= strcharpart(thisline, 0, i) . '|' . "\n"
+    let buffer_content .= join(getbufline(bufname(""), line(".")+1, line("$")), "\n")
+    let buffer_content .= nr2char(0x10)
+
+    " ---------- to debug -----------
+    " call writefile(split(buffer_content, "\n"), "/tmp/blabla")
+
+    " ... and send
+    "   Following would be using system(), but it wouldnt work, we need
+    "   a socket
+    " :silent let complete_output = system(hxml_sys, buffer_content)
+    let flog = ch_logfile("/tmp/blabla2", "a")
+    let socket_haxe = ch_open("localhost:".g:vaxe_cache_server_port, {"mode": "raw" })
+    " call ch_sendraw(socket_haxe, buffer_content, {'callback': "s:ProcessAnswer" })
+    let response = ch_evalraw(socket_haxe, buffer_content)
+    echomsg response
+    return ""
+endfunction
+
+" function! s:ProcessAnswer(chan, msg)
+"     let flog = ch_logfile("/tmp/blabla2", "a")
+"     call ch_log(" yu?", flog)
+"     echomsg "Hi"
+"    call vaxe#Log(a:msg)
+"    call ch_close(a:chan) 
+"    return ""
+" endfunction
 

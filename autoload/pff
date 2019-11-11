@@ -1,0 +1,32 @@
+
+
+    " " quick and dirty check for error
+    " let tag = complete_output[1:4]
+    " if tag != "type" && tag != "list" && tag != "pos>"
+    "    let error = complete_output[:len(complete_output)-2]
+    "    if type(error) != type("")
+    "       return s:ShowCompletionError("Compiler error: ",  "No valid output was received from completion request")
+    "    endif
+    "    cgete error
+    "    return s:ShowCompletionError( "Compiler error: ", error)
+    " endif
+    " let output = []
+    " call vaxe#Log('compiler output: ' . complete_output)
+
+    " " execute the python completion script in autoload/vaxe.py
+    " execute g:vaxepy . "complete('complete_output','output'
+    "             \, 'a:base', 'g:vaxe_completion_alter_signature'
+    "             \, 'g:vaxe_completion_collapse_overload')"
+
+    " call vaxe#Log("display elements: " . len(output))
+    " for o in output
+    "     let tag = ''
+    "     if has_key(o,'info')
+    "         let o['info'] = join(o['info'],"\n")
+    "     endif
+    "     if has_key(o,'menu')
+    "         let o['info'] = o['info'] . "\n  " . o['menu']
+    "     endif
+    " endfor
+
+    " return output

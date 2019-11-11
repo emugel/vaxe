@@ -391,6 +391,19 @@ SETTINGS                                        *vaxe-settings*
     some_method [f] (arg1 : Int, arg2 : String) : Bool
 <
 
+*g:vaxe_completion_use_display_stdin*
+                        Since this PR from Nadako in Haxe
+                        https://github.com/HaxeFoundation/haxe/pull/5120
+                        has been merged there is a `-D display-stdin` define 
+                        for the completion server to expect content of the file 
+                        to complete being sent via stdin instead of a file.
+                        This fixes problems not only fixes some problem with 
+                        UTF-8 but also is faster than using disk-based
+                        completion. Finally it will avoid having to
+                        use the features from
+                        *g:vaxe_completion_prevent_bufwrite_events* and
+                        *g:vaxe_completion_require_autowrite*.
+
 *g:vaxe_completion_write_compiler_ouput*
                         Determines whether or not vaxe should let the compiler
                         write the output generated from a completion request.
